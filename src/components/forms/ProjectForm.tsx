@@ -1,17 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, X, Upload } from "lucide-react";
+import { CalendarIcon, UserPlus } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { getSession } from "@/utils/session";
 
 interface ProjectFormProps {
   onSubmit: (project: any) => void;
@@ -19,60 +18,76 @@ interface ProjectFormProps {
   initialData?: any;
 }
 
-const availableTags = ["Web Development", "Mobile App", "UI/UX", "Backend", "Frontend", "Testing", "DevOps"];
-const teamMembers = [
-  { id: "1", name: "John Doe", email: "john@example.com" },
-  { id: "2", name: "Jane Smith", email: "jane@example.com" },
-  { id: "3", name: "Mike Johnson", email: "mike@example.com" },
+const statusOptions = [
+  { value: "active", label: "Active" },
+  { value: "on-hold", label: "On Hold" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 export function ProjectForm({ onSubmit, onCancel, initialData }: ProjectFormProps) {
   const [formData, setFormData] = useState({
     name: initialData?.name || "",
     description: initialData?.description || "",
-    tags: initialData?.tags || [],
-    manager: initialData?.manager || "",
-    deadline: initialData?.deadline ? new Date(initialData.deadline) : undefined,
-    priority: initialData?.priority || "medium",
-    image: initialData?.image || null,
+    startDate: initialData?.startDate ? new Date(initialData.startDate) : undefined,
+    endDate: initialData?.endDate ? new Date(initialData.endDate) : undefined,
+    status: initialData?.status || "active",
+    assignedEmployees: initialData?.assignedEmployees || [],
   });
 
-  const [selectedTag, setSelectedTag] = useState("");
+  const [allEmployees, setAllEmployees] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
+  const { token } = getSession();
 
-  const handleAddTag = (tag: string) => {
-    if (tag && !formData.tags.includes(tag)) {
-      setFormData(prev => ({
-        ...prev,
-        tags: [...prev.tags, tag]
-      }));
-      setSelectedTag("");
+  // Fetch employees from backend
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:11000/api"}/employees`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => setAllEmployees(data))
+      .catch(() => setAllEmployees([]));
+  }, [token]);
+
+  // Filter employees by search
+  const filteredEmployees = allEmployees.filter(
+    (emp) =>
+      emp.name?.toLowerCase().includes(search.toLowerCase()) ||
+      emp.email?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = {
+      ...formData,
+      startDate: formData.startDate ? formData.startDate.toISOString() : undefined,
+      endDate: formData.endDate ? formData.endDate.toISOString() : undefined,
+    };
+    const { token } = getSession();
+    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:11000/api"}/projects`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      // Optionally, call onSubmit or close modal
+      onSubmit(await res.json());
+    } else {
+      alert("Failed to create project");
     }
   };
 
-  const handleRemoveTag = (tagToRemove: string) => {
+  const handleEmployeeToggle = (id: string) => {
     setFormData(prev => ({
       ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
+      assignedEmployees: prev.assignedEmployees.includes(id)
+        ? prev.assignedEmployees.filter(empId => empId !== id)
+        : [...prev.assignedEmployees, id],
     }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setFormData(prev => ({
-          ...prev,
-          image: e.target?.result as string
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
   };
 
   return (
@@ -94,80 +109,73 @@ export function ProjectForm({ onSubmit, onCancel, initialData }: ProjectFormProp
             />
           </div>
 
-          {/* Tags */}
+          {/* Status */}
           <div className="space-y-2">
-            <Label>Tags</Label>
-            <div className="flex gap-2 mb-2">
-              <Select value={selectedTag} onValueChange={setSelectedTag}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Select tags" />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableTags.filter(tag => !formData.tags.includes(tag)).map(tag => (
-                    <SelectItem key={tag} value={tag}>{tag}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                type="button"
-                onClick={() => handleAddTag(selectedTag)}
-                disabled={!selectedTag}
-              >
-                Add
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {formData.tags.map(tag => (
-                <Badge key={tag} variant="secondary" className="flex items-center gap-1">
-                  {tag}
-                  <X
-                    size={12}
-                    className="cursor-pointer hover:text-destructive"
-                    onClick={() => handleRemoveTag(tag)}
-                  />
-                </Badge>
-              ))}
-            </div>
-          </div>
-
-          {/* Project Manager */}
-          <div className="space-y-2">
-            <Label htmlFor="manager">Project Manager</Label>
-            <Select value={formData.manager} onValueChange={(value) => setFormData(prev => ({ ...prev, manager: value }))}>
+            <Label htmlFor="status">Status</Label>
+            <Select
+              value={formData.status}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}
+            >
               <SelectTrigger>
-                <SelectValue placeholder="Select project manager" />
+                <SelectValue placeholder="Select status" />
               </SelectTrigger>
               <SelectContent>
-                {teamMembers.map(member => (
-                  <SelectItem key={member.id} value={member.id}>
-                    {member.name} ({member.email})
-                  </SelectItem>
+                {statusOptions.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Deadline */}
+          {/* Assigned Employees */}
           <div className="space-y-2">
-            <Label>Deadline</Label>
+            <Label>Add Team Members</Label>
+            <div className="flex gap-2 mb-2">
+              <Input
+                placeholder="Search by name or email"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              <UserPlus className="text-muted-foreground" />
+            </div>
+            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+              {filteredEmployees.map(member => (
+                <label key={member._id} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.assignedEmployees.includes(member._id)}
+                    onChange={() => handleEmployeeToggle(member._id)}
+                  />
+                  {member.name} ({member.email})
+                </label>
+              ))}
+              {filteredEmployees.length === 0 && (
+                <span className="text-muted-foreground text-sm">No employees found.</span>
+              )}
+            </div>
+          </div>
+
+          {/* Start Date */}
+          <div className="space-y-2">
+            <Label>Start Date</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
                   className={cn(
                     "w-full justify-start text-left font-normal",
-                    !formData.deadline && "text-muted-foreground"
+                    !formData.startDate && "text-muted-foreground"
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
-                  {formData.deadline ? format(formData.deadline, "PPP") : "Pick a date"}
+                  {formData.startDate ? format(formData.startDate, "PPP") : "Pick a date"}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="single"
-                  selected={formData.deadline}
-                  onSelect={(date) => setFormData(prev => ({ ...prev, deadline: date }))}
+                  selected={formData.startDate}
+                  onSelect={(date) => setFormData(prev => ({ ...prev, startDate: date }))}
                   initialFocus
                   className="p-3 pointer-events-auto"
                 />
@@ -175,63 +183,32 @@ export function ProjectForm({ onSubmit, onCancel, initialData }: ProjectFormProp
             </Popover>
           </div>
 
-          {/* Priority */}
+          {/* End Date */}
           <div className="space-y-2">
-            <Label>Priority</Label>
-            <RadioGroup
-              value={formData.priority}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, priority: value }))}
-              className="flex gap-6"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="low" id="low" />
-                <Label htmlFor="low">Low</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="medium" id="medium" />
-                <Label htmlFor="medium">Medium</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="high" id="high" />
-                <Label htmlFor="high">High</Label>
-              </div>
-            </RadioGroup>
-          </div>
-
-          {/* Image Upload */}
-          <div className="space-y-2">
-            <Label>Project Image</Label>
-            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
-              {formData.image ? (
-                <div className="space-y-2">
-                  <img src={formData.image} alt="Project" className="max-h-32 mx-auto rounded" />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setFormData(prev => ({ ...prev, image: null }))}
-                  >
-                    Remove Image
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
-                  <div className="text-sm text-muted-foreground">
-                    <label htmlFor="image-upload" className="cursor-pointer text-primary hover:underline">
-                      Upload an image
-                    </label>
-                    <input
-                      id="image-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+            <Label>End Date</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !formData.endDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {formData.endDate ? format(formData.endDate, "PPP") : "Pick a date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={formData.endDate}
+                  onSelect={(date) => setFormData(prev => ({ ...prev, endDate: date }))}
+                  initialFocus
+                  className="p-3 pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Description */}
@@ -243,6 +220,7 @@ export function ProjectForm({ onSubmit, onCancel, initialData }: ProjectFormProp
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Enter project description"
               rows={4}
+              required
             />
           </div>
 

@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: synergy-mongo
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  backend:
+    build: 
+      context: ./Backend
+    platform: linux/amd64 
+    container_name: synergy-backend
+    restart: always
+    ports:
+      - "11000:11000"
+    environment:
+      - PORT=11000
+      - DATABASE=mongodb://root:example@mongo:27017/synergy?authSource=admin
+      - DATABASE_PASSWORD=example
+      - NODE_ENV=development
+    depends_on:
+      - mongo
+    volumes:
+      - ./Backend:/app
+
+volumes:
+  mongo-data:

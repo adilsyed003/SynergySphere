@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { setSession } from "@/utils/session";
 
 interface AuthFormProps {
   mode: 'signin' | 'signup';
@@ -11,22 +12,70 @@ interface AuthFormProps {
   onModeChange: (mode: 'signin' | 'signup') => void;
 }
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:11000/api";
+
 export function AuthForm({ mode, onSuccess, onModeChange }: AuthFormProps) {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     password: "",
-    confirmPassword: ""
+    confirmPassword: "",
+    organizationName: "",
+    organizationDescription: "",
+    organizationContactPhone: "",
+    organizationAddress: "",
   });
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate authentication
-    setTimeout(() => {
+
+    if (mode === "signup" && formData.password !== formData.confirmPassword) {
+      alert("Passwords do not match");
+      return;
+    }
+
+    const payload =
+      mode === "signup"
+        ? {
+            email: formData.email,
+            password: formData.password,
+            name: `${formData.firstName} ${formData.lastName}`,
+            organization: {
+              name: formData.organizationName,
+              description: formData.organizationDescription,
+              contactPhone: formData.organizationContactPhone,
+              address: formData.organizationAddress,
+            },
+          }
+        : {
+            email: formData.email,
+            password: formData.password,
+          };
+
+    try {
+      const res = await fetch(`${API_URL}/auth/${mode === "signup" ? "signup" : "login"}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.message || "Authentication failed");
+        return;
+      }
+
+      if (data.token && data.user) {
+        setSession(data.token, data.user);
+      }
+
       onSuccess();
-    }, 1000);
+    } catch (err) {
+      alert("Network error");
+    }
   };
 
   const handleForgotPassword = (e: React.FormEvent) => {
@@ -77,7 +126,7 @@ export function AuthForm({ mode, onSuccess, onModeChange }: AuthFormProps) {
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full max-w-4xl mx-auto">
       <CardHeader className="text-center">
         <div className="flex items-center justify-center gap-2 mb-4">
           <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-light rounded-lg flex items-center justify-center">
@@ -93,11 +142,11 @@ export function AuthForm({ mode, onSuccess, onModeChange }: AuthFormProps) {
           }
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === 'signup' && (
-            <>
-              <div className="grid grid-cols-2 gap-4">
+      <CardContent className="w-full">
+        <div className="max-h-[70vh] overflow-y-auto">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === 'signup' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="firstName">First Name</Label>
                   <Input
@@ -120,66 +169,126 @@ export function AuthForm({ mode, onSuccess, onModeChange }: AuthFormProps) {
                     required
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="organizationName">Organization Name</Label>
+                  <Input
+                    id="organizationName"
+                    type="text"
+                    placeholder="Enter your organization name"
+                    value={formData.organizationName}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        organizationName: e.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="organizationDescription">Organization Description</Label>
+                  <Input
+                    id="organizationDescription"
+                    type="text"
+                    placeholder="Describe your organization (optional)"
+                    value={formData.organizationDescription}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        organizationDescription: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="organizationContactPhone">Contact Phone</Label>
+                  <Input
+                    id="organizationContactPhone"
+                    type="text"
+                    placeholder="Contact phone (optional)"
+                    value={formData.organizationContactPhone}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        organizationContactPhone: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="organizationAddress">Organization Address</Label>
+                  <Input
+                    id="organizationAddress"
+                    type="text"
+                    placeholder="Address (optional)"
+                    value={formData.organizationAddress}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        organizationAddress: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
               </div>
-            </>
-          )}
-          
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="john@example.com"
-              value={formData.email}
-              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-              required
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Enter your password"
-              value={formData.password}
-              onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-              required
-            />
-          </div>
-          
-          {mode === 'signup' && (
+            )}
+
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Confirm your password"
-                value={formData.confirmPassword}
-                onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                id="email"
+                type="email"
+                placeholder="john@example.com"
+                value={formData.email}
+                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                 required
               />
             </div>
-          )}
-          
-          {mode === 'signin' && (
-            <div className="flex justify-end">
-              <Button 
-                type="button" 
-                variant="link" 
-                className="text-sm p-0 h-auto"
-                onClick={() => setShowForgotPassword(true)}
-              >
-                Forgot password?
-              </Button>
+            
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="Enter your password"
+                value={formData.password}
+                onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                required
+              />
             </div>
-          )}
-          
-          <Button type="submit" className="w-full">
-            {mode === 'signin' ? 'Sign In' : 'Create Account'}
-          </Button>
-        </form>
-        
+            
+            {mode === 'signup' && (
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Confirm your password"
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  required
+                />
+              </div>
+            )}
+            
+            {mode === 'signin' && (
+              <div className="flex justify-end">
+                <Button 
+                  type="button" 
+                  variant="link" 
+                  className="text-sm p-0 h-auto"
+                  onClick={() => setShowForgotPassword(true)}
+                >
+                  Forgot password?
+                </Button>
+              </div>
+            )}
+            
+            <Button type="submit" className="w-full">
+              {mode === 'signin' ? 'Sign In' : 'Create Account'}
+            </Button>
+          </form>
+        </div>
         <div className="mt-6">
           <Separator />
           <div className="text-center mt-4">
